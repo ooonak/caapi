@@ -16,6 +16,8 @@ public:
   explicit CertUtils();
 
 protected:
+  /* ===== Client methods ===== */
+
   /**
    * @brief generateKey
    * @param keyLength
@@ -60,6 +62,9 @@ protected:
    * @return
    */
   bool saveCsr(X509_REQ *pX509Req, const std::string &csrName) const;
+
+  /* ===== CA methods ===== */
+  bool loadCaCertAndKey(const std::string &certFile, X509 **cert, const std::string &keyFile, EVP_PKEY **key);
 
 private:
 };

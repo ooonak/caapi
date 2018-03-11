@@ -1,8 +1,15 @@
-#include "certutils.hpp"
+﻿#include "certutils.hpp"
 #include <iostream>
 #include <unistd.h>
+#include <openssl/opensslv.h>
 
-CertUtils::CertUtils() {}
+CertUtils::CertUtils() {
+    // TODO OPENSSL_VERSION_AT_LEAST(1, 1);
+    // OpenSSL_version_num()
+
+    std::cout << "Developed against OpenSSL 1.1.0g" << std::endl;
+    std::cout << "Your version is: " << OpenSSL_version(OPENSSL_VERSION) << std::endl;
+}
 
 EVP_PKEY *CertUtils::generateKey(int keyLength) const {
   bool result = false;
@@ -273,4 +280,68 @@ bool CertUtils::saveCsr(X509_REQ *pReq, const std::string &reqName) const {
   }
 
   return true;
+}
+
+bool CertUtils::loadCaCertAndKey(const std::string &certFile, X509 **cert, const std::string &keyFile, EVP_PKEY **key) {
+    if (!key || !cert) {
+      err("Don't you dare throw a null pointer at me, you shall not parse!");
+      return false;
+    }
+
+    bool result = false;
+    BIO *bio = nullptr;
+
+    do {
+        bio = BIO_new(BIO_s_file());
+        if (!bio) {
+            err("Could not create BIO object (BIO_new())");
+            break;
+        }
+
+        if (!BIO_read_filename(bio, certFile.c_str())) {
+            err("Failed to open CA certificate file " << certFile << " (BIO_read_filename())");
+            break;
+        }
+
+        *cert = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
+        if (!*cert) {
+            err("Failed to read CA certifcate (PEM_read_bio_X509())");
+            break;
+        }
+
+        BIO_free_all(bio);
+
+        bio = BIO_new(BIO_s_file());
+        if (!bio) {
+            err("Could not create BIO object (BIO_new())");
+            break;
+        }
+
+        if (!BIO_read_filename(bio, keyFile.c_str())) {
+            err("Failed to open CA key file " << keyFile << " (BIO_read_filename())");
+            break;
+        }
+
+        *key = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+        if (!*key) {
+            err("Failed to read CA key (PEM_read_bio_PrivateKey())");
+            break;
+        }
+
+        BIO_free_all(bio);
+
+        result = true;
+    } while (0);
+
+    if (!result) {
+        if (bio)
+            BIO_free_all(bio);
+        if (*cert)
+            X509_free(*cert);
+        if (*key)
+            EVP_PKEY_free(*key);
+        return false;
+    }
+
+    return true;
 }

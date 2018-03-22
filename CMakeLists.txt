@@ -33,7 +33,13 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wpedantic -Werror -O3")
 
 add_definitions(-DWITH_DEBUG)
 
+find_package(Tcmalloc)
+find_package(Threads)
 find_package(OpenSSL)
+find_package(Boost 1.52 COMPONENTS system thread regex REQUIRED)
+
+include_directories(${OPENSSL_INCLUDE_DIR})
+include_directories(${Boost_INCLUDE_DIR})
 
 # Output to build
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -47,8 +53,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 include(dev-tools.cmake)
 
-add_subdirectory (src)
-add_subdirectory (test)
+add_subdirectory(server)
+add_subdirectory(client)
+#add_subdirectory(test)
 
 enable_testing()
 add_test(NAME ${PROJECT_NAME}_tests COMMAND ${PROJECT_NAME}_tests)

@@ -14,6 +14,7 @@
 class CertUtils {
 public:
   explicit CertUtils();
+  std::string printCert(const std::string &certFile) const;
 
 protected:
   /* ===== Client methods ===== */
@@ -65,8 +66,15 @@ protected:
 
   /* ===== CA methods ===== */
   bool loadCaCertAndKey(const std::string &certFile, X509 **cert, const std::string &keyFile, EVP_PKEY **key);
+  X509* signReq(EVP_PKEY *caKey,
+                const X509 * const caCrt,
+                X509_REQ *req,
+                size_t daysValid,
+                const EVP_MD *signatureAlgorithm = DEFAULT_SIGNATURE_ALGORITHM);
 
 private:
+  bool generateAndSetSerial(X509* crt);
+
 };
 
 #endif // __CERTUTILS_HPP__

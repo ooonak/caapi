@@ -2,16 +2,17 @@
 #define __CAUTILS_HPP__
 
 #include "certutils.hpp"
+#include <string>
+#include <sstream>
 
 class CaUtils : public CertUtils {
 public:
   explicit CaUtils(const std::string &workFolder = std::string("ca"),
-                   const std::string &caCertFile = std::string("caCert.pem"),
-                   const std::string &caKeyFile = std::string("caKey.pem"));
+                   const std::string &caCertFile = std::string("ca_cert.pem"),
+                   const std::string &caKeyFile = std::string("ca_key.pem"));
     ~CaUtils();
     bool init();
-
-    //bool signRequest();
+    bool sign(std::ostringstream &out, const std::string &csr);
 
 private:
     const std::string workFolder_;

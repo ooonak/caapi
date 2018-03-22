@@ -2,6 +2,7 @@
 #include <iostream>
 #include <unistd.h>
 #include <openssl/opensslv.h>
+#include <openssl/rand.h>
 
 CertUtils::CertUtils() {
     // TODO OPENSSL_VERSION_AT_LEAST(1, 1);
@@ -282,6 +283,20 @@ bool CertUtils::saveCsr(X509_REQ *pReq, const std::string &reqName) const {
   return true;
 }
 
+int pass_cb(char *buf, int size, int rwflag, void *u) {
+    (void) rwflag;
+    (void) u;
+
+    std::string x = "test";
+
+    int length = x.length();
+    length = (length > size) ? size : x.length();
+
+    memcpy(buf, x.c_str(), length);
+
+    return length;
+}
+
 bool CertUtils::loadCaCertAndKey(const std::string &certFile, X509 **cert, const std::string &keyFile, EVP_PKEY **key) {
     if (!key || !cert) {
       err("Don't you dare throw a null pointer at me, you shall not parse!");
@@ -322,7 +337,7 @@ bool CertUtils::loadCaCertAndKey(const std::string &certFile, X509 **cert, const
             break;
         }
 
-        *key = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+        *key = PEM_read_bio_PrivateKey(bio, NULL, pass_cb, NULL);
         if (!*key) {
             err("Failed to read CA key (PEM_read_bio_PrivateKey())");
             break;
@@ -344,4 +359,120 @@ bool CertUtils::loadCaCertAndKey(const std::string &certFile, X509 **cert, const
     }
 
     return true;
+}
+
+X509* CertUtils::signReq(EVP_PKEY *caKey, const X509 * const caCrt, X509_REQ *req, size_t daysValid, const EVP_MD *signatureAlgorithm) {
+    if (!caKey || !caCrt || !req) {
+      err("Don't you dare throw a null pointer at me, you shall not parse!");
+      return nullptr;
+    }
+
+    bool result = false;
+    X509* crt = nullptr;
+    do {
+        crt = X509_new();
+        if (!crt) {
+            err("Could not create X509 object (X509_new())");
+            break;
+        }
+
+        if (!generateAndSetSerial(crt)) {
+            err("Could not create create and set serial (generateAndSetSerial())");
+            break;
+        }
+
+        X509_set_issuer_name(crt, X509_get_subject_name(caCrt));
+
+        X509_gmtime_adj(X509_get_notBefore(crt), 0);
+        X509_gmtime_adj(X509_get_notAfter(crt), (long) daysValid * 3600);
+
+        X509_set_subject_name(crt, X509_REQ_get_subject_name(req));
+
+        EVP_PKEY *reqPubkey = X509_REQ_get_pubkey(req);
+        X509_set_pubkey(crt, reqPubkey);
+        EVP_PKEY_free(reqPubkey);
+
+        if (X509_sign(crt, caKey, signatureAlgorithm) == 0) {
+            err("Could not sign certificate (X509_sign())");
+            break;
+        }
+
+        result = true;
+    } while (0);
+
+    if (!result) {
+        if (crt)
+            X509_free(crt);
+    }
+
+    // TODO During development
+    if (crt) {
+        BIO* bio = BIO_new_fp(stdout, BIO_NOCLOSE);
+        X509_print_ex(bio, crt, XN_FLAG_COMPAT, X509_FLAG_COMPAT);
+        BIO_free_all(bio);
+    }
+
+    return crt;
+}
+
+bool CertUtils::generateAndSetSerial(X509 *crt) {
+    if (crt == nullptr)
+        return false;
+
+    unsigned char bytes[20];
+    if (RAND_bytes(bytes, sizeof(bytes)) != 1)
+        return false;
+
+    // Ensure positive number
+    bytes[0] &= 0x7f;
+
+    BIGNUM *b = BN_new();
+    BN_bin2bn(bytes, sizeof(bytes), b);
+    ASN1_INTEGER *serial = ASN1_INTEGER_new();
+    BN_to_ASN1_INTEGER(b, serial);
+
+    X509_set_serialNumber(crt, serial);
+
+    ASN1_INTEGER_free(serial);
+    BN_free(b);
+
+    return true;
+}
+
+std::string CertUtils::printCert(const std::string &certFile) const {
+    BIO *bio = nullptr;
+    X509 *cert = nullptr;
+
+    do {
+        bio = BIO_new(BIO_s_file());
+        if (!bio) {
+            err("Could not create BIO object (BIO_new())");
+            break;
+        }
+
+        if (!BIO_read_filename(bio, certFile.c_str())) {
+            err("Failed to open CA certificate file " << certFile << " (BIO_read_filename())");
+            break;
+        }
+
+        cert = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
+        if (!cert) {
+            err("Failed to read CA certifcate (PEM_read_bio_X509())");
+            break;
+        }
+
+        if (bio)
+            BIO_free_all(bio);
+
+        bio = BIO_new_fp(stdout, BIO_NOCLOSE);
+        X509_print_ex(bio, cert, XN_FLAG_COMPAT, X509_FLAG_COMPAT);
+    } while (0);
+
+    if (cert)
+        X509_free(cert);
+
+    if (bio)
+        BIO_free_all(bio);
+
+    return std::string("todo...");
 }

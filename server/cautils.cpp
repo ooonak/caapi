@@ -21,3 +21,12 @@ bool CaUtils::init() {
         return false;
     }
 }
+
+bool CaUtils::sign(std::ostringstream &out, const std::string &csr) {
+    out << std::string("Yephaer");
+
+    if (csr == "csr")
+        return true;
+
+    return false;
+}
